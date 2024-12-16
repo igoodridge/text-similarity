@@ -1,52 +1,30 @@
 from flask import Flask, render_template, request
 from pathlib import Path
 import pandas as pd
-from src.similarity_search import SimilarityEngine, QuestionSimilarityComparator
-from src.data_preprocessing import preprocess_dataset
-from src.embeddings import generate_embeddings
+from src.similarity_search import SimilarityEngine, QuestionSimilarityComparator, load_embeddings_from_dataframe
 from src.utils.logger import setup_logger
+from src.utils.config import load_config
+
+# Load configuration
+config = load_config()
+logger = setup_logger("Flask App", config['logging']['file']['app'])
 
 app = Flask(__name__)
-logger = setup_logger("Flask App", "logs/app.log")
 
 class DataManager:
     """Manages data processing and embeddings generation."""
     
     def __init__(self):
-        self.paths = {
-            'raw': Path("data/raw/train.csv"),
-            'processed': Path("data/processed/train.pkl"),
-            'embeddings': Path("data/embeddings/train_embeddings.pkl")
-        }
+        self.config = config
+        self.paths = config['paths']
     
     def check_data_exists(self):
         """Check if all necessary data files exist."""
-        return all(path.exists() for path in self.paths.values())
-    
-    def process_data(self, sample_size=50000):
-        """Process raw data and generate embeddings."""
-        logger.info("Starting data processing pipeline...")
-        
-        # Create directories if they don't exist
-        for path in self.paths.values():
-            path.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Process dataset
-        logger.info("Processing dataset...")
-        preprocess_dataset(
-            str(self.paths['raw']),
-            str(self.paths['processed']),
-            sample_size=sample_size
-        )
-        
-        # Generate embeddings
-        logger.info("Generating embeddings...")
-        generate_embeddings(
-            str(self.paths['processed']),
-            str(self.paths['embeddings'])
-        )
-        
-        logger.info("Data processing complete.")
+        required_files = [
+            self.paths['processed']['train'],
+            self.paths['embeddings']['train']
+        ]
+        return all(Path(path).exists() for path in required_files)
 
 class SimilarityApp:
     """Manages similarity search functionality."""
@@ -59,28 +37,34 @@ class SimilarityApp:
     
     def initialize_components(self):
         """Initialize similarity search components."""
-        # Check if data exists, if not process it
         if not self.data_manager.check_data_exists():
-            logger.info("Required data files not found. Starting data processing...")
-            self.data_manager.process_data()
+            raise FileNotFoundError(
+                "Required data files not found. Please run the pipeline first."
+            )
         
         # Load data
-        df = pd.read_pickle(self.data_manager.paths['processed'])
-        embeddings_df = pd.read_pickle(self.data_manager.paths['embeddings'])
+        embeddings_df = pd.read_pickle(self.data_manager.paths['embeddings']['train'])
         
         # Initialize components
-        from src.similarity_search import load_embeddings_from_dataframe
-        embeddings, questions = load_embeddings_from_dataframe(
-            embeddings_df, "q1_embeddings", "q2_embeddings"
-        )
+        embeddings, questions = load_embeddings_from_dataframe(embeddings_df)
         
-        self.similarity_engine = SimilarityEngine(embeddings, questions)
-        self.similarity_comparator = QuestionSimilarityComparator()
+        self.similarity_engine = SimilarityEngine(
+            embeddings, 
+            questions, 
+            model_name=config['model']['name']
+        )
+        self.similarity_comparator = QuestionSimilarityComparator(
+            model_name=config['model']['name']
+        )
         
         logger.info("Similarity components initialized successfully")
 
 # Initialize similarity application
-similarity_app = SimilarityApp()
+try:
+    similarity_app = SimilarityApp()
+except Exception as e:
+    logger.error(f"Failed to initialize similarity app: {e}")
+    raise
 
 @app.route("/")
 def index():
@@ -91,8 +75,11 @@ def index():
 def find_similar():
     """Handle similar questions search request."""
     query_text = request.form["query"]
-    top_k = int(request.form.get('top_k', 5))
-    method = request.form.get('similarity_method', 'faiss')
+    top_k = int(request.form.get('top_k', config['similarity']['default_top_k']))
+    method = request.form.get('similarity_method', config['similarity']['default_method'])
+    
+    # Validate top_k
+    top_k = min(top_k, config['similarity']['max_top_k'])
     
     similar_questions = similarity_app.similarity_engine.find_similar_questions(
         query_text, top_k, method
@@ -123,4 +110,8 @@ def compare_questions():
     )
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(
+        host=config['app']['host'],
+        port=config['app']['port'],
+        debug=config['app']['debug']
+    )

@@ -4,9 +4,12 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from src.utils.logger import setup_logger
+from src.utils.config import load_config
+
+config =load_config()
 
 # Initialize logger
-logger = setup_logger("Data Preprocessing", "logs/preprocessing.log")
+logger = setup_logger("Data Preprocessing", config['logging']['file']['preprocessing'])
 
 # Download necessary NLTK resources
 nltk.download('stopwords', quiet=True)
@@ -14,30 +17,30 @@ nltk.download('punkt', quiet=True)
 
 def clean_text(text):
     """
-    Comprehensive text cleaning:
-    - Convert to lowercase
-    - Remove special characters
-    - Tokenize
-    - Remove stopwords (keeping question words)
+    Clean text based on configuration settings.
     """
+    text_config = config['preprocessing']['text_cleaning']
+
     # Handle non-string input
     if pd.isna(text):
         return ""
     if not isinstance(text, str):
         return str(text)
     
-    # Convert to lowercase
-    text = text.lower()
+    # Apply configured transformations
+    if text_config['convert_lowercase']:
+        text = text.lower()
 
-    # Remove special characters and numbers
-    text = re.sub(r'[^a-zA-Z\s]', '', text)
+    if text_config['remove_punctuation']:
+        text = re.sub(r'[^a-zA-Z\s]', '', text)
 
-    # Tokenize
     tokens = word_tokenize(text)
 
-    # Remove stopwords but keep question words
-    stop_words = set(stopwords.words('english')) - {"what", "why", "how", "who", "when", "where"}
-    tokens = [word for word in tokens if word not in stop_words]
+    if text_config['remove_stopwords']:
+        # Get question words from config
+        question_words = set(text_config['question_words']) if text_config['keep_question_words'] else set()
+        stop_words = set(stopwords.words('english')) - question_words
+        tokens = [word for word in tokens if word not in stop_words]
     
     return ' '.join(tokens).strip()
 
@@ -60,41 +63,52 @@ def standardize_column(df, column_name):
     """
     return df[column_name].fillna('').astype(str).str.strip()
 
-def preprocess_dataset(input_path, output_path, sample_size=50000):
+def preprocess_dataset(
+    input_path=None, 
+    output_path=None, 
+    sample_size=None
+):
     """
-    Preprocess the Quora Question Pairs dataset:
-    1. Load and inspect data
-    2. Clean and normalize text
-    3. Sample if requested
-    4. Save processed dataset
+    Preprocess the dataset using configuration settings.
     """
-    logger.info("Starting dataset preprocessing...")
+    # Use config values if not specified
+    input_path = input_path or config['paths']['raw']['train']
+    output_path = output_path or config['paths']['processed']['train']
+    sample_size = sample_size or config['preprocessing']['sample_size']
+
+    logger.info(f"Starting dataset preprocessing from {input_path}")
 
     # Load dataset
-    logger.info(f"Loading dataset from {input_path}")
     df = pd.read_csv(input_path)
     inspect_dataset(df)
 
+    # Get column names from config
+    input_cols = config['columns']['input']
+    processed_cols = config['columns']['processed']
+
     # Clean dataset
     logger.info("Removing missing values and duplicates...")
-    df.dropna(subset=["question1", "question2"], inplace=True)
-    df.drop_duplicates(subset=["question1", "question2"], inplace=True)
+    df.dropna(subset=[input_cols['first_question'], input_cols['second_question']], inplace=True)
+    df.drop_duplicates(subset=[input_cols['first_question'], input_cols['second_question']], inplace=True)
     logger.info(f"Dataset shape after cleaning: {df.shape}")
 
-    # Sample if requested
+    # Sample if specified
     if sample_size:
         logger.info(f"Sampling {sample_size} rows...")
-        df = df.sample(n=min(sample_size, len(df)), random_state=42)
+        df = df.sample(
+            n=min(sample_size, len(df)), 
+            random_state=config['preprocessing']['random_seed']
+        )
 
     # Clean text
     logger.info("Cleaning question text...")
-    df["cleaned_q1"] = df["question1"].apply(clean_text)
-    df["cleaned_q2"] = df["question2"].apply(clean_text)
+    df[processed_cols['first_question']] = df[input_cols['first_question']].apply(clean_text)
+    df[processed_cols['second_question']] = df[input_cols['second_question']].apply(clean_text)
 
     # Standardize columns
     logger.info("Standardizing column types...")
-    df["cleaned_q1"] = standardize_column(df, "cleaned_q1")
-    df["cleaned_q2"] = standardize_column(df, "cleaned_q2")
+    df[processed_cols['first_question']] = standardize_column(df, processed_cols['first_question'])
+    df[processed_cols['second_question']] = standardize_column(df, processed_cols['second_question'])
 
     # Final inspection
     logger.info("Final dataset inspection:")
@@ -109,15 +123,4 @@ def preprocess_dataset(input_path, output_path, sample_size=50000):
 
 if __name__ == "__main__":
     # Process training data
-    preprocess_dataset(
-        input_path="data/raw/train.csv",
-        output_path="data/processed/train.pkl",
-        sample_size=1000
-    )
-    
-    # Uncomment to process test data
-    # preprocess_dataset(
-    #     input_path="data/raw/test.csv",
-    #     output_path="data/processed/test.pkl",
-    #     sample_size=1000
-    # )
+    preprocess_dataset()
