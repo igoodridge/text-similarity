@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Text Similarity Search</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Text Similarity Search</h1>
+        
+        <form action="/find_similar" method="POST">
+            <label for="query">Enter your question:</label>
+            <input type="text" id="query" name="query" required>
+            
+            <label for="top_k">Number of Similar Questions:</label>
+            <input type="number" id="top_k" name="top_k" value="5" min="1" max="10">
+            
+            <button type="submit">Find Similar Questions</button>
+        </form>
+
+        {% if similar_questions %}
+        <h2>Similar Questions to: "{{ query }}"</h2>
+        <ul>
+            {% for item in similar_questions %}
+            <li>
+                <strong>{{ item.question }}</strong> - Similarity Score: {{ item.similarity_score | round(3) }}
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+</body>
+</html>

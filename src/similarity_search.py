@@ -100,7 +100,7 @@ class SimilaritySearcher:
         logger.info(f"Evaluation metrics: {metrics}")
         return metrics
 
-    def find_similar_questions(self, query_text: str, model_name: str = "all-MiniLM-L6-v2", top_k: int = 5) -> list:
+    def find_similar_questions(self, query_text: str, top_k: int = 5, model_name: str = "all-MiniLM-L6-v2") -> list:
         """
         Find the top-k similar questions to the query text based on cosine similarity.
 

@@ -1,40 +1,44 @@
-from src.utils.logger import setup_logger
-import argparse
-from src.data_preprocessing import preprocess_data
+from src.data_preprocessing import preprocess_dataset
 from src.embeddings import generate_embeddings
 from src.similarity_search import SimilaritySearcher
-import logging
-import os
+from src.utils.logger import setup_logger
 
-def main():
-    # Set up logger
-    os.makedirs("logs", exist_ok=True)
-    logger = setup_logger(log_file="logs/app.log", log_level=logging.INFO)
+logger = setup_logger("Main Runner", "logs/main.log")
 
-    logger.info("Starting the Text Similarity System")
-
+def run_pipeline():
     try:
-        # Parse arguments
-        parser = argparse.ArgumentParser(description="Text Similarity Search System")
-        parser.add_argument("--data", required=True, help="Path to input dataset")
-        parser.add_argument("--output", required=True, help="Path to save results")
-        args = parser.parse_args()
+        # Step 1: Preprocess Dataset
+        logger.info("Starting dataset preprocessing...")
+        preprocess_dataset(
+            input_path="data/raw/train.csv",
+            output_path="data/processed/train.pkl",
+            sample_size=1000
+        )
+        logger.info("Dataset preprocessing completed.")
 
-        # Workflow
-        logger.info("Preprocessing data...")
-        preprocessed_data = preprocess_data(args.data)
+        # Step 2: Generate Embeddings
+        logger.info("Starting embeddings generation...")
+        generate_embeddings(
+            processed_df_path="data/processed/train.pkl",
+            embedding_path="data/embeddings/train_embeddings.pkl",
+            model_name="all-MiniLM-L6-v2"
+        )
+        logger.info("Embeddings generation completed.")
 
-        logger.info("Generating embeddings...")
-        embedding_file = generate_embeddings(preprocessed_data, model_name="all-MiniLM-L6-v2")
-
-        logger.info("Performing similarity search...")
-        searcher = SimilaritySearcher(embedding_file)
-        query = input("Enter your query: ")
-        results = searcher.find_similar_questions(query, top_k=5)
-        logger.info(f"Search Results: {results}")
+        # Step 3: Initialize Similarity Searcher and Evaluate
+        logger.info("Initializing similarity searcher and running evaluation...")
+        searcher = SimilaritySearcher(
+            questions_path="data/processed/train.pkl",
+            embeddings_path="data/embeddings/train_embeddings.pkl",
+            column1="q1_embeddings",
+            column2="q2_embeddings"
+        )
+        question_similarity = searcher.compute_question_similarity(threshold=0.7)
+        metrics = searcher.evaluate_similarity()
+        logger.info(f"Similarity model evaluation metrics: {metrics}")
 
     except Exception as e:
-        logger.error(f"An error occurred: {e}", exc_info=True)
+        logger.error(f"An error occurred during the pipeline: {e}")
 
 if __name__ == "__main__":
-    main()
+    run_pipeline()
