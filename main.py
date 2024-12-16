@@ -1,40 +1,60 @@
-from src.utils.logger import setup_logger
-import argparse
-from src.data_preprocessing import preprocess_data
+from pathlib import Path
+import pandas as pd
+from src.data_preprocessing import preprocess_dataset
 from src.embeddings import generate_embeddings
-from src.similarity_search import SimilaritySearcher
-import logging
-import os
+from src.similarity_search import SimilarityEngine, QuestionSimilarityComparator
+from src.utils.logger import setup_logger
+from src.utils.config import load_config
 
-def main():
-    # Set up logger
-    os.makedirs("logs", exist_ok=True)
-    logger = setup_logger(log_file="logs/app.log", log_level=logging.INFO)
+# Load configuration
+config = load_config()
+logger = setup_logger("Main Runner", config['logging']['file']['app'])
 
-    logger.info("Starting the Text Similarity System")
-
+def run_pipeline():
+    """Run the complete data processing and model initialization pipeline."""
     try:
-        # Parse arguments
-        parser = argparse.ArgumentParser(description="Text Similarity Search System")
-        parser.add_argument("--data", required=True, help="Path to input dataset")
-        parser.add_argument("--output", required=True, help="Path to save results")
-        args = parser.parse_args()
+        # Step 1: Preprocess Dataset
+        logger.info("Starting dataset preprocessing...")
+        preprocess_dataset(
+            input_path=config['paths']['raw']['train'],
+            output_path=config['paths']['processed']['train'],
+            sample_size=config['preprocessing']['sample_size']
+        )
+        logger.info("Dataset preprocessing completed.")
 
-        # Workflow
-        logger.info("Preprocessing data...")
-        preprocessed_data = preprocess_data(args.data)
+        # Step 2: Generate Embeddings
+        logger.info("Starting embeddings generation...")
+        generate_embeddings(
+            processed_df_path=config['paths']['processed']['train'],
+            embedding_path=config['paths']['embeddings']['train'],
+            model_name=config['model']['name']
+        )
+        logger.info("Embeddings generation completed.")
 
-        logger.info("Generating embeddings...")
-        embedding_file = generate_embeddings(preprocessed_data, model_name="all-MiniLM-L6-v2")
-
-        logger.info("Performing similarity search...")
-        searcher = SimilaritySearcher(embedding_file)
-        query = input("Enter your query: ")
-        results = searcher.find_similar_questions(query, top_k=5)
-        logger.info(f"Search Results: {results}")
+        # Step 3: Initialize Similarity Search Components
+        logger.info("Testing similarity search functionality...")
+        # Load the data and initialize components
+        df = pd.read_pickle(config['paths']['processed']['train'])
+        embeddings_df = pd.read_pickle(config['paths']['embeddings']['train'])
+        
+        from src.similarity_search import load_embeddings_from_dataframe
+        embeddings, questions = load_embeddings_from_dataframe(
+            embeddings_df
+        )
+        
+        # Test similarity engine
+        engine = SimilarityEngine(embeddings, questions)
+        test_query = "What is machine learning?"
+        results = engine.find_similar_questions(
+            test_query,
+            top_k=config['similarity']['default_top_k'],
+            method=config['similarity']['default_method']
+        )
+        logger.info(f"Sample search results for '{test_query}': {results}")
 
     except Exception as e:
-        logger.error(f"An error occurred: {e}", exc_info=True)
+        logger.error(f"An error occurred during the pipeline: {e}")
+        raise
 
 if __name__ == "__main__":
-    main()
+    run_pipeline()

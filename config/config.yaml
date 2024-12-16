@@ -1,0 +1,86 @@
+# Application-wide settings
+app:
+  name: "Question Similarity Search"
+  debug: true
+  host: "0.0.0.0"
+  port: 5000
+
+# Data paths configuration
+paths:
+  data_dir: "data"
+  raw:
+    train: "data/raw/train.csv"
+    test: "data/raw/test.csv"
+  processed:
+    train: "data/processed/train.pkl"
+    test: "data/processed/test.pkl"
+  embeddings:
+    train: "data/embeddings/train_embeddings.pkl"
+    test: "data/embeddings/test_embeddings.pkl"
+  logs: "logs"
+
+# Column names configuration
+columns:
+  input:
+    first_question: "question1"
+    second_question: "question2"
+    is_duplicate: "is_duplicate"
+  processed:
+    first_question: "processed_q1"
+    second_question: "processed_q2"
+  embeddings:
+    first_question: "embedding_q1"
+    second_question: "embedding_q2"
+
+# Data preprocessing settings
+preprocessing:
+  sample_size: 100000
+  random_seed: 42
+  text_cleaning:
+    remove_numbers: true
+    remove_punctuation: true
+    convert_lowercase: true
+    remove_stopwords: true
+    keep_question_words: true
+    question_words:
+      - "what"
+      - "why"
+      - "how"
+      - "who"
+      - "when"
+      - "where"
+
+# Model configuration
+model:
+  name: "all-MiniLM-L6-v2"
+  similarity_threshold: 0.7
+  batch_size: 32
+
+# Similarity search configuration
+similarity:
+  default_method: "faiss"
+  methods:
+    - "faiss"
+    - "cosine"
+  default_top_k: 5
+  max_top_k: 10
+  faiss:
+    index_type: "IndexFlatL2"
+    normalize_vectors: true
+  cosine:
+    use_threshold: true
+    threshold: 0.7
+
+# Logging configuration
+logging:
+  level: "INFO"
+  console_level: "DEBUG"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  date_format: "%Y-%m-%d %H:%M:%S"
+  max_bytes: 5242880  # 5 MB in bytes
+  backup_count: 3
+  file:
+    preprocessing: "preprocessing.log"
+    embeddings: "embeddings.log"
+    similarity: "similarity.log"
+    app: "app.log"
