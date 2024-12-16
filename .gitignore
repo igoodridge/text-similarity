@@ -1,0 +1,26 @@
+# Data files
+*.csv
+*.zip
+*.pkl
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+
+# Logs
+*.log
+
+# Virtual environment
+venv/
+.env
+
+# Jupyter notebookes
+*.ipynb_checkpoints
+
+# IDE Settings
+.vscode/
+.idea/
+
+# Code archive
+archive/
