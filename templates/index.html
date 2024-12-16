@@ -10,26 +10,74 @@
     <div class="container">
         <h1>Text Similarity Search</h1>
         
-        <form action="/find_similar" method="POST">
-            <label for="query">Enter your question:</label>
-            <input type="text" id="query" name="query" required>
-            
-            <label for="top_k">Number of Similar Questions:</label>
-            <input type="number" id="top_k" name="top_k" value="5" min="1" max="10">
-            
-            <button type="submit">Find Similar Questions</button>
-        </form>
+        <!-- Similar Questions Search Form -->
+        <section class="search-section">
+            <h2>Find Similar Questions</h2>
+            <form action="/find_similar" method="POST">
+                <div class="form-group">
+                    <label for="query">Enter your question:</label>
+                    <input type="text" id="query" name="query" value="{{ query }}" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="top_k">Number of Similar Questions:</label>
+                    <input type="number" id="top_k" name="top_k" value="5" min="1" max="10">
+                </div>
+                
+                <div class="form-group">
+                    <label for="similarity_method">Search Method:</label>
+                    <select id="similarity_method" name="similarity_method">
+                        <option value="faiss" {% if selected_method == 'faiss' %}selected{% endif %}>FAISS</option>
+                        <option value="cosine" {% if selected_method == 'cosine' %}selected{% endif %}>Cosine</option>
+                    </select>
+                </div>
+                
+                <button type="submit">Search</button>
+            </form>
 
-        {% if similar_questions %}
-        <h2>Similar Questions to: "{{ query }}"</h2>
-        <ul>
-            {% for item in similar_questions %}
-            <li>
-                <strong>{{ item.question }}</strong> - Similarity Score: {{ item.similarity_score | round(3) }}
-            </li>
-            {% endfor %}
-        </ul>
-        {% endif %}
+            {% if similar_questions %}
+            <div class="results">
+                <h3>Similar Questions to: "{{ query }}"</h3>
+                <ul>
+                    {% for item in similar_questions %}
+                    <li>
+                        <strong>{{ item.question }}</strong>
+                        <span class="score">Similarity: {{ "%.3f"|format(item.similarity_score) }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+        </section>
+
+        <!-- Question Comparison Form -->
+        <section class="compare-section">
+            <h2>Compare Two Questions</h2>
+            <form action="/compare_questions" method="POST">
+                <div class="form-group">
+                    <label for="question1">First Question:</label>
+                    <input type="text" id="question1" name="question1" value="{{ question1 }}" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="question2">Second Question:</label>
+                    <input type="text" id="question2" name="question2" value="{{ question2 }}" required>
+                </div>
+                
+                <button type="submit">Compare</button>
+            </form>
+
+            {% if similarity_metrics %}
+            <div class="results">
+                <h3>Comparison Results:</h3>
+                <ul>
+                    <li>Raw Similarity: {{ "%.3f"|format(similarity_metrics.raw_similarity) }}</li>
+                    <li>Normalized Score: {{ "%.3f"|format(similarity_metrics.normalized_score) }}</li>
+                    <li>Similar: {{ "Yes" if similarity_metrics.is_similar else "No" }}</li>
+                </ul>
+            </div>
+            {% endif %}
+        </section>
     </div>
 </body>
 </html>
